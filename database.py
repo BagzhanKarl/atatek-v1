@@ -6,42 +6,35 @@ import requests
 # Загрузка переменных из .env файла
 load_dotenv()
 
+# Создание глобальных переменных для подключения
+conn = mysql.connector.connect(
+    host=os.getenv("DB_HOST"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    database=os.getenv("DB_NAME")
+)
+cursor = conn.cursor(dictionary=True)
+
+
 def save_json_to_mariadb(json_data):
     try:
-        # Подключение к базе данных с использованием переменных из .env
-        conn = mysql.connector.connect(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
-        )
-        cursor = conn.cursor()
-
-        # Создание таблицы
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS json_data (
-            id INT PRIMARY KEY,
-            name VARCHAR(255),
-            locked INT,
-            author INT,
-            image VARCHAR(255),
-            birth_year INT,
-            death_year INT,
-            meta_status VARCHAR(50),
-            checked INT
-        );
-        """
-        cursor.execute(create_table_query)
-
         # SQL-запрос для вставки данных
         insert_query = """
         INSERT INTO json_data (id, name, locked, author, image, birth_year, death_year, meta_status, checked)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            locked = VALUES(locked),
+            author = VALUES(author),
+            image = VALUES(image),
+            birth_year = VALUES(birth_year),
+            death_year = VALUES(death_year),
+            meta_status = VALUES(meta_status)
         """
 
-        # Проход по данным и вставка в базу данных
-        for item in json_data:
-            cursor.execute(insert_query, (
+        # Подготовка данных для пакетной вставки
+        data_to_insert = [
+            (
                 item['id'],
                 item['name'],
                 item['locked'],
@@ -50,32 +43,21 @@ def save_json_to_mariadb(json_data):
                 item['birth_year'],
                 item['death_year'],
                 item['meta_status']
-            ))
+            )
+            for item in json_data
+        ]
 
-        # Подтверждение изменений
+        cursor.executemany(insert_query, data_to_insert)
         conn.commit()
 
         print("Данные успешно сохранены в базе данных.")
 
     except mysql.connector.Error as err:
         print(f"Ошибка: {err}")
-    finally:
-        # Закрытие соединения
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
 
-# save_json_to_mariadb(data)
+
 def get_first_unchecked_record():
     try:
-        conn = mysql.connector.connect(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
-        )
-        cursor = conn.cursor(dictionary=True)
-
         # SQL-запрос для получения первой записи с checked = 0
         cursor.execute("SELECT * FROM json_data WHERE checked = 0 ORDER BY id LIMIT 1")
         record = cursor.fetchone()
@@ -92,10 +74,10 @@ def get_first_unchecked_record():
             return record_id
         else:
             print("Нет записей с checked = 0")
+            return None
 
-    finally:
-        cursor.close()
-        conn.close()
+    except mysql.connector.Error as err:
+        print(f"Ошибка: {err}")
 
 
 def getDateFromApi(id):
@@ -104,8 +86,16 @@ def getDateFromApi(id):
     response = requests.get(url)
     return response.json()
 
-# Вызов функции
 
+# Основной цикл
 while True:
-    save_json_to_mariadb(getDateFromApi(get_first_unchecked_record()))
+    record_id = get_first_unchecked_record()
+    if record_id:
+        json_data = getDateFromApi(record_id)
+        save_json_to_mariadb(json_data)
+    else:
+        break
 
+# Закрытие соединения и курсора
+cursor.close()
+conn.close()
