@@ -1,13 +1,19 @@
 import mysql.connector
+import json
+from dotenv import load_dotenv
+import os
+
+# Загрузка переменных из .env файла
+load_dotenv()
 
 def save_json_to_mariadb(json_data):
     try:
-        # Подключение к базе данных
+        # Подключение к базе данных с использованием переменных из .env
         conn = mysql.connector.connect(
-            host="localhost",
-            user="ваш_пользователь",  # замените на ваши данные
-            password="ваш_пароль",    # замените на ваши данные
-            database="ваша_база_данных"  # замените на ваши данные
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME")
         )
         cursor = conn.cursor()
 
