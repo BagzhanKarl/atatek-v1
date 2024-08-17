@@ -27,15 +27,16 @@ def save_json_to_mariadb(json_data):
             image VARCHAR(255),
             birth_year INT,
             death_year INT,
-            meta_status VARCHAR(50)
+            meta_status VARCHAR(50),
+            checked INT
         );
         """
         cursor.execute(create_table_query)
 
         # SQL-запрос для вставки данных
         insert_query = """
-        INSERT INTO json_data (id, name, locked, author, image, birth_year, death_year, meta_status)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO json_data (id, name, locked, author, image, birth_year, death_year, meta_status, checked)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
         """
 
         # Проход по данным и вставка в базу данных
